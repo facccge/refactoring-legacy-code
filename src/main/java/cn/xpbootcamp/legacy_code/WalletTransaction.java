@@ -9,6 +9,8 @@ import cn.xpbootcamp.legacy_code.utils.RedisDistributedLock;
 import javax.transaction.InvalidTransactionException;
 
 public class WalletTransaction {
+    private static final int TWENTY_DAYS_TIMESTAMP = 1728000000;
+
     private String id;
     private Long buyerId;
     private Long sellerId;
@@ -20,7 +22,7 @@ public class WalletTransaction {
     private String walletTransactionId;
 
 
-    public WalletTransaction(String preAssignedId, Long buyerId, Long sellerId, Long productId, String orderId) {
+    public WalletTransaction(String preAssignedId, Long buyerId, Long sellerId, Long productId, String orderId, Double amount) {
         if (preAssignedId != null && !preAssignedId.isEmpty()) {
             this.id = preAssignedId;
         } else {
@@ -33,6 +35,7 @@ public class WalletTransaction {
         this.sellerId = sellerId;
         this.productId = productId;
         this.orderId = orderId;
+        this.amount = amount;
         this.status = STATUS.TO_BE_EXECUTED;
         this.createdTimestamp = System.currentTimeMillis();
     }
@@ -44,20 +47,19 @@ public class WalletTransaction {
         if (status == STATUS.EXECUTED) return true;
         boolean isLocked = false;
         try {
-            isLocked = RedisDistributedLock.getSingletonInstance().lock(id);
+            isLocked = getRedisDistributedLockinstance().lock(id);
 
             // 锁定未成功，返回false
             if (!isLocked) {
                 return false;
             }
             if (status == STATUS.EXECUTED) return true; // double check
-            long executionInvokedTimestamp = System.currentTimeMillis();
             // 交易超过20天
-            if (executionInvokedTimestamp - createdTimestamp > 1728000000) {
+            if (isExpired()) {
                 this.status = STATUS.EXPIRED;
                 return false;
             }
-            WalletService walletService = new WalletServiceImpl();
+            WalletService walletService = getWalletService();
             String walletTransactionId = walletService.moveMoney(id, buyerId, sellerId, amount);
             if (walletTransactionId != null) {
                 this.walletTransactionId = walletTransactionId;
@@ -69,9 +71,21 @@ public class WalletTransaction {
             }
         } finally {
             if (isLocked) {
-                RedisDistributedLock.getSingletonInstance().unlock(id);
+                getRedisDistributedLockinstance().unlock(id);
             }
         }
+    }
+
+    boolean isExpired() {
+        return System.currentTimeMillis() - this.createdTimestamp > TWENTY_DAYS_TIMESTAMP;
+    }
+
+    WalletServiceImpl getWalletService() {
+        return new WalletServiceImpl();
+    }
+
+    RedisDistributedLock getRedisDistributedLockinstance() {
+        return RedisDistributedLock.getSingletonInstance();
     }
 
 }
