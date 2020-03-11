@@ -23,14 +23,7 @@ public class WalletTransaction {
 
 
     public WalletTransaction(String preAssignedId, Long buyerId, Long sellerId, Long productId, String orderId, Double amount) {
-        if (preAssignedId != null && !preAssignedId.isEmpty()) {
-            this.id = preAssignedId;
-        } else {
-            this.id = IdGenerator.generateTransactionId();
-        }
-        if (!this.id.startsWith("t_")) {
-            this.id = "t_" + preAssignedId;
-        }
+        generateId(preAssignedId);
         this.buyerId = buyerId;
         this.sellerId = sellerId;
         this.productId = productId;
@@ -40,12 +33,23 @@ public class WalletTransaction {
         this.createdTimestamp = System.currentTimeMillis();
     }
 
+    void generateId(String preAssignedId) {
+        if (preAssignedId != null && !preAssignedId.isEmpty()) {
+            this.id = preAssignedId;
+        } else {
+            this.id = IdGenerator.generateTransactionId();
+        }
+        if (!this.id.startsWith("t_")) {
+            this.id = "t_" + preAssignedId;
+        }
+    }
+
     public boolean execute() throws InvalidTransactionException {
-        if (buyerId == null || (sellerId == null || amount < 0.0)) {
+        if (isInvalidTransaction()) {
             throw new InvalidTransactionException("This is an invalid transaction");
         }
 
-        if (status == STATUS.EXECUTED) return true;
+        if (isExecuted()) return true;
 
         boolean isLocked = false;
         try {
@@ -55,15 +59,13 @@ public class WalletTransaction {
                 return false;
             }
 
-            if (status == STATUS.EXECUTED) return true;
-
             if (isExpired()) {
                 this.status = STATUS.EXPIRED;
                 return false;
             }
             WalletService walletService = getWalletService();
             String walletTransactionId = walletService.moveMoney(id, buyerId, sellerId, amount);
-            if (walletTransactionId != null) {
+            if (isValidWalletTransactionId(walletTransactionId)) {
                 this.walletTransactionId = walletTransactionId;
                 this.status = STATUS.EXECUTED;
                 return true;
@@ -76,6 +78,18 @@ public class WalletTransaction {
                 getRedisDistributedLockinstance().unlock(id);
             }
         }
+    }
+
+    boolean isValidWalletTransactionId(String walletTransactionId) {
+        return walletTransactionId != null;
+    }
+
+    boolean isExecuted() {
+        return status == STATUS.EXECUTED;
+    }
+
+    boolean isInvalidTransaction() {
+        return buyerId == null || (sellerId == null || amount < 0.0);
     }
 
     boolean isExpired() {
