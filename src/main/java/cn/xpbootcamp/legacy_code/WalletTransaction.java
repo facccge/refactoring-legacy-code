@@ -50,11 +50,15 @@ public class WalletTransaction {
             throw new InvalidTransactionException("This is an invalid transaction");
         }
 
-        if (isExecuted()) return true;
+        if (isExecuted()) {
+            return true;
+        }
+
+        RedisDistributedLock redisDistributedLock = getRedisDistributedLockinstance();
 
         boolean isLocked = false;
         try {
-            isLocked = getRedisDistributedLockinstance().lock(id);
+            isLocked = redisDistributedLock.lock(id);
 
             if (!isLocked) {
                 return false;
@@ -64,6 +68,7 @@ public class WalletTransaction {
                 this.status = STATUS.EXPIRED;
                 return false;
             }
+
             WalletService walletService = getWalletService();
             String walletTransactionId = walletService.moveMoney(id, buyerId, sellerId, amount);
             if (isValidWalletTransactionId(walletTransactionId)) {
@@ -76,7 +81,7 @@ public class WalletTransaction {
             }
         } finally {
             if (isLocked) {
-                getRedisDistributedLockinstance().unlock(id);
+                redisDistributedLock.unlock(id);
             }
         }
     }
