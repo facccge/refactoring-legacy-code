@@ -54,6 +54,11 @@ public class WalletTransaction {
             return true;
         }
 
+        if (isExpired()) {
+            this.status = STATUS.EXPIRED;
+            return false;
+        }
+
         RedisDistributedLock redisDistributedLock = getRedisDistributedLockinstance();
 
         boolean isLocked = false;
@@ -64,21 +69,17 @@ public class WalletTransaction {
                 return false;
             }
 
-            if (isExpired()) {
-                this.status = STATUS.EXPIRED;
-                return false;
-            }
-
             WalletService walletService = getWalletService();
             String walletTransactionId = walletService.moveMoney(id, buyerId, sellerId, amount);
-            if (isValidWalletTransactionId(walletTransactionId)) {
-                this.walletTransactionId = walletTransactionId;
-                this.status = STATUS.EXECUTED;
-                return true;
-            } else {
+            if (isInvalidWalletTransactionId(walletTransactionId)) {
                 this.status = STATUS.FAILED;
                 return false;
             }
+
+            this.walletTransactionId = walletTransactionId;
+            this.status = STATUS.EXECUTED;
+            return true;
+
         } finally {
             if (isLocked) {
                 redisDistributedLock.unlock(id);
@@ -86,8 +87,8 @@ public class WalletTransaction {
         }
     }
 
-    boolean isValidWalletTransactionId(String walletTransactionId) {
-        return walletTransactionId != null;
+    boolean isInvalidWalletTransactionId(String walletTransactionId) {
+        return walletTransactionId == null;
     }
 
     boolean isExecuted() {
@@ -95,7 +96,7 @@ public class WalletTransaction {
     }
 
     boolean isInvalidTransaction() {
-        return buyerId == null || (sellerId == null || amount < 0.0);
+        return buyerId == null || sellerId == null || amount < 0.0;
     }
 
     boolean isExpired() {
