@@ -10,6 +10,7 @@ import javax.transaction.InvalidTransactionException;
 
 public class WalletTransaction {
     private static final int TWENTY_DAYS_TIMESTAMP = 1728000000;
+    public static final String PREFIX_OF_TRANSACTION_ID = "t_";
 
     private String id;
     private Long buyerId;
@@ -23,7 +24,7 @@ public class WalletTransaction {
 
 
     public WalletTransaction(String preAssignedId, Long buyerId, Long sellerId, Long productId, String orderId, Double amount) {
-        generateId(preAssignedId);
+        this.id = generateId(preAssignedId);
         this.buyerId = buyerId;
         this.sellerId = sellerId;
         this.productId = productId;
@@ -33,15 +34,15 @@ public class WalletTransaction {
         this.createdTimestamp = System.currentTimeMillis();
     }
 
-    void generateId(String preAssignedId) {
-        if (preAssignedId != null && !preAssignedId.isEmpty()) {
-            this.id = preAssignedId;
-        } else {
-            this.id = IdGenerator.generateTransactionId();
+    String generateId(String preAssignedId) {
+        if (isValidPreAssignedId(preAssignedId)) {
+            return preAssignedId.startsWith(PREFIX_OF_TRANSACTION_ID) ? preAssignedId : PREFIX_OF_TRANSACTION_ID + preAssignedId;
         }
-        if (!this.id.startsWith("t_")) {
-            this.id = "t_" + preAssignedId;
-        }
+        return PREFIX_OF_TRANSACTION_ID + IdGenerator.generateTransactionId();
+    }
+
+    private boolean isValidPreAssignedId(String preAssignedId) {
+        return preAssignedId != null && !preAssignedId.isEmpty();
     }
 
     public boolean execute() throws InvalidTransactionException {
