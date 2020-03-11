@@ -44,17 +44,19 @@ public class WalletTransaction {
         if (buyerId == null || (sellerId == null || amount < 0.0)) {
             throw new InvalidTransactionException("This is an invalid transaction");
         }
+
         if (status == STATUS.EXECUTED) return true;
+
         boolean isLocked = false;
         try {
             isLocked = getRedisDistributedLockinstance().lock(id);
 
-            // 锁定未成功，返回false
             if (!isLocked) {
                 return false;
             }
-            if (status == STATUS.EXECUTED) return true; // double check
-            // 交易超过20天
+
+            if (status == STATUS.EXECUTED) return true;
+
             if (isExpired()) {
                 this.status = STATUS.EXPIRED;
                 return false;
